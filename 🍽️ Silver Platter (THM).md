@@ -98,7 +98,7 @@ Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
 ## FFUF (VHOST)
 - No subdomains or virtual hosts found using FFUF.
 ```bash
-ffuf -w /home/n0derunnr/Documents/.wordlists/SecLists/Discovery/DNS/namelist.txt -H "Host: FUZZ.example.com" -u http://10.10.190.218
+ffuf -w /home/****/Documents/.wordlists/SecLists/Discovery/DNS/namelist.txt -H "Host: FUZZ.example.com" -u http://10.10.190.218
 ```
 
 ## Gobuster (Forced Browsing)
