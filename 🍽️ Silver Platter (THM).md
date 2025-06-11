@@ -181,7 +181,7 @@ Hydra (https://github.com/vanhauser-thc/thc-hydra) finished at 2025-06-08 09:55:
 Capturing a login request and sending it to Burp's Repeater tool can be used with the extension "Turbo Intruder" to bypass rate limiting on the community addition. FUZZ the desired parameter with the `%s` characters. Switch payload to basic.py and modify password list payload path.
 
 ![image](https://github.com/user-attachments/assets/4efb8af4-a141-4cb8-85dc-eede15b3ea5a)
-- We see that 'adipiscing' is significantly content length and larger than the other passwords when brute forced. 
+- We see that 'adipiscing' is significantly larger in content length and larger than the other passwords when brute forced. 
 
 ## IDOR Vulnerability
 
